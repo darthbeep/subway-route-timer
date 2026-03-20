@@ -1,11 +1,12 @@
 const fs = require("fs");
 const csv = require("csv-parser");
+require("dotenv").config({ quiet: true });
 
-const GTFS_DIR = "./data";
-const PATH_FILE = "./input/start.csv";
-const START_TIME = "02:00:00";
+const GTFS_DIR = process.env.GTFS_DIR || "./data";
+const PATH_FILE = process.env.PATH_FILE || "./input/start.csv";
+const START_TIME = process.env.START_TIME || "02:00:00";
 
-let path = []
+let path = [];
 let stops = {};
 let routes = {};
 let trips = {};
@@ -186,8 +187,8 @@ function findTrip(fromStop, toStop, currentTime) {
 }
 
 function goThroughRoute(tripStart, logFullRoute = true) {
-  let currentTime = tripStart
-  let tripOffset = null
+  let currentTime = tripStart;
+  let tripOffset = null;
 
   for (const step of path) {
     const trip = findTrip(step.from, step.to, currentTime);
@@ -198,7 +199,7 @@ function goThroughRoute(tripStart, logFullRoute = true) {
     }
 
     if (tripOffset === null) {
-      tripOffset = trip.depart - tripStart
+      tripOffset = trip.depart - tripStart;
     }
 
     if (logFullRoute) {
@@ -213,7 +214,6 @@ function goThroughRoute(tripStart, logFullRoute = true) {
         step.transfer ? `(then walk ${step.transfer / 60} minutes)` : "",
       );
     }
-    
 
     visitedStops.add(step.from);
     visitedStops.add(step.to);
@@ -228,15 +228,17 @@ function goThroughRoute(tripStart, logFullRoute = true) {
     console.log("\nTotal time:", secondsToTime(total));
   }
 
-  return total
+  return total;
 }
 
 function findManyRoutes(offset) {
-  let tripStart = 0
+  let tripStart = 0;
   while (tripStart < SECONDS_IN_DAY) {
-    const duration = goThroughRoute(tripStart, false)
-    console.log(`Time for ${secondsToTime(tripStart)} start is ${secondsToTime(duration)}`)
-    tripStart += offset * 60
+    const duration = goThroughRoute(tripStart, false);
+    console.log(
+      `Time for ${secondsToTime(tripStart)} start is ${secondsToTime(duration)}`,
+    );
+    tripStart += offset * 60;
   }
 }
 
@@ -249,12 +251,17 @@ async function main(findMany = false) {
   await loadPath();
 
   if (findMany) {
-    findManyRoutes(60)
-  }
-  else {
+    findManyRoutes(60);
+  } else {
     const tripStart = timeToSeconds(START_TIME);
-    goThroughRoute(tripStart)
+    goThroughRoute(tripStart);
   }
+
+  console.log(
+    process.env.GTFS_DIR,
+    process.env.PATH_FILE,
+    process.env.START_TIME,
+  );
 }
 
 main(false);
