@@ -256,12 +256,6 @@ async function main(findMany = false) {
     const tripStart = timeToSeconds(START_TIME);
     goThroughRoute(tripStart);
   }
-
-  console.log(
-    process.env.GTFS_DIR,
-    process.env.PATH_FILE,
-    process.env.START_TIME,
-  );
 }
 
 main(false);
