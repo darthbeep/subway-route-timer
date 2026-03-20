@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "start": "node src/route-timer.js"
+  },
+  "dependencies": {
+    "csv-parser": "^3.2.0"
+  }
+}

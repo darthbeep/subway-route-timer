@@ -1,0 +1,7 @@
+from_stop,to_stop,transfer_time
+H15,H04
+H04,H11
+H11,A61
+A61,A65
+A65,A55
+A55,A51
