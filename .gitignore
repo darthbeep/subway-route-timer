@@ -5,3 +5,4 @@ data/*.zip
 data/*.txt
 data-*
 input/*.csv
+output/*

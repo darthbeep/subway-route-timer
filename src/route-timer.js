@@ -8,11 +8,11 @@ const START_TIME = process.env.START_TIME || "02:00:00";
 
 let path = [];
 let stops = {};
+let stop_coords = {};
 let routes = {};
 let trips = {};
 let stopTimes = {};
 let weekdayServices = new Set();
-let visitedStops = new Set();
 const SECONDS_IN_DAY = 24 * 60 * 60;
 
 function normalizeStopId(id) {
@@ -44,9 +44,15 @@ async function loadStops() {
     fs.createReadStream(`${GTFS_DIR}/stops.txt`)
       .pipe(csv())
       .on("data", (r) => {
-        if (r.stop_id === normalizeStopId(r.stop_id))
+        if (r.stop_id === normalizeStopId(r.stop_id)) {
           stops[r.stop_id] = r.stop_name;
-        stops[r.stop_id] = r.stop_name;
+          stop_coords[r.stop_id] = {
+            lat: r.stop_lat,
+            lon: r.stop_lon,
+          };
+        }
+
+        // stops[r.stop_id] = r.stop_name;
       })
       .on("end", resolve);
   });
@@ -57,7 +63,10 @@ async function loadRoutes() {
     fs.createReadStream(`${GTFS_DIR}/routes.txt`)
       .pipe(csv())
       .on("data", (r) => {
-        routes[r.route_id] = r.route_short_name || r.route_long_name;
+        routes[r.route_id] = {
+          name: r.route_short_name || r.route_long_name,
+          color: "#" + r.route_color,
+        };
       })
       .on("end", resolve);
   });
@@ -178,7 +187,8 @@ function findTrip(fromStop, toStop, currentTime) {
         tripId,
         depart,
         arrive,
-        route: routes[trips[tripId]],
+        route: routes[trips[tripId]].name,
+        color: routes[trips[tripId]].color,
       };
     }
   }
@@ -186,7 +196,8 @@ function findTrip(fromStop, toStop, currentTime) {
   return best;
 }
 
-function goThroughRoute(tripStart, logFullRoute = true) {
+function createRouteSteps(tripStart, logFullRoute = false) {
+  const route = [];
   let currentTime = tripStart;
   let tripOffset = null;
 
@@ -215,8 +226,15 @@ function goThroughRoute(tripStart, logFullRoute = true) {
       );
     }
 
-    visitedStops.add(step.from);
-    visitedStops.add(step.to);
+    route.push({
+      route: trip.route,
+      from: step.from,
+      to: step.to,
+      arrive: trip.arrive,
+      depart: trip.depart,
+      transfer: step.transfer,
+      color: trip.color,
+    });
 
     currentTime = trip.arrive + step.transfer;
   }
@@ -228,21 +246,85 @@ function goThroughRoute(tripStart, logFullRoute = true) {
     console.log("\nTotal time:", secondsToTime(total));
   }
 
-  return total;
+  return route;
+}
+
+function displayFullRoute() {
+  const tripStart = timeToSeconds(START_TIME);
+  const route = createRouteSteps(tripStart);
+  for (const step of route) {
+    console.log(
+      step.route,
+      stops[step.from],
+      "→",
+      stops[step.to],
+      secondsToTime(step.depart),
+      "→",
+      secondsToTime(step.arrive),
+      step.transfer ? `(then walk ${step.transfer / 60} minutes)` : "",
+    );
+  }
+  const totalTime = route[route.length - 1].arrive - route[0].depart;
+  console.log("\nTotal time:", secondsToTime(totalTime));
 }
 
 function findManyRoutes(offset) {
   let tripStart = 0;
   while (tripStart < SECONDS_IN_DAY) {
-    const duration = goThroughRoute(tripStart, false);
+    const route = createRouteSteps(tripStart, false);
+    const totalTime = route[route.length - 1].arrive - route[0].depart;
     console.log(
-      `Time for ${secondsToTime(tripStart)} start is ${secondsToTime(duration)}`,
+      `Time for ${secondsToTime(tripStart)} start is ${secondsToTime(totalTime)}`,
     );
     tripStart += offset * 60;
   }
 }
 
-async function main(findMany = false) {
+async function createGeoJson() {
+  const tripStart = timeToSeconds(START_TIME);
+  const route = createRouteSteps(tripStart);
+
+  const output = {
+    type: "FeatureCollection",
+    name: "subway",
+    crs: {
+      type: "name",
+      properties: {
+        name: "urn:ogc:def:crs:OGC:1.3:CRS84",
+      },
+    },
+    features: [],
+  };
+
+  let i = 1;
+  for (const step of route) {
+    const feature = {
+      type: "Feature",
+      properties: {
+        step: i,
+        line: step.route,
+        color: step.color,
+      },
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [
+            Number(stop_coords[step.from].lon),
+            Number(stop_coords[step.from].lat),
+          ],
+          [Number(stop_coords[step.to].lon), Number(stop_coords[step.to].lat)],
+        ],
+      },
+    };
+    output.features.push(feature);
+    i++;
+  }
+
+  fs.writeFileSync("./output/gis.geojson", JSON.stringify(output));
+  console.log("Writing to geojson file");
+}
+
+async function main(mode = 0) {
   await loadStops();
   await loadRoutes();
   await loadCalendar();
@@ -250,12 +332,13 @@ async function main(findMany = false) {
   await loadStopTimes();
   await loadPath();
 
-  if (findMany) {
+  if (mode === 0) {
+    displayFullRoute();
+  } else if (mode === 1) {
     findManyRoutes(60);
-  } else {
-    const tripStart = timeToSeconds(START_TIME);
-    goThroughRoute(tripStart);
+  } else if (mode === 2) {
+    createGeoJson();
   }
 }
 
-main(false);
+main(0);
