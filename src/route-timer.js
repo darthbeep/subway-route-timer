@@ -16,6 +16,8 @@ let weekdayServices = new Set();
 
 function findTrip(fromStop, toStop, currentTime) {
   let best = null;
+  let bestFromIndex = -1
+  let bestToIndex = -1
 
   for (const tripId in stopTimes) {
     const seq = stopTimes[tripId];
@@ -32,16 +34,29 @@ function findTrip(fromStop, toStop, currentTime) {
     if (depart < currentTime) continue;
 
     if (!best || depart < best.depart) {
+      bestFromIndex = fromIndex
+      bestToIndex = toIndex
       best = {
         tripId,
         depart,
         arrive,
         route: routes[trips[tripId]].name,
         color: routes[trips[tripId]].color,
+        fullStops: []
       };
     }
   }
 
+  if (best && bestFromIndex !== -1 && bestToIndex !== -1 && bestToIndex > bestFromIndex) {
+    const bestTrip = stopTimes[best.tripId]
+    let i = bestFromIndex
+    while (i <= bestToIndex) {
+      const stop = bestTrip[i].stop_id
+      stops[stop].visits += 1
+      best.fullStops.push(stop)
+      i+=1
+    }
+  }
   return best;
 }
 
@@ -70,6 +85,7 @@ function createRouteSteps(tripStart) {
       depart: trip.depart,
       transfer: step.transfer,
       color: trip.color,
+      fullStops: trip.fullStops
     });
 
     currentTime = trip.arrive + step.transfer;
@@ -98,6 +114,16 @@ function displayFullRoute() {
   }
   const totalTime = route[route.length - 1].arrive - route[0].depart;
   console.log("\nTotal time:", secondsToTime(totalTime));
+
+  const missingStops = []
+  for (const stop of Object.values(stops)) {
+    if (stop.visits === 0) {
+      missingStops.push(stop.stop_id)
+    }
+  }
+  if (missingStops.length > 0) {
+    console.log("Missing stops:", missingStops.join(", "))
+  }
 }
 
 function findManyRoutes(offset) {
@@ -139,10 +165,10 @@ async function createGeoJson() {
       },
       geometry: {
         type: "LineString",
-        coordinates: [
-          [Number(stops[step.from].lon), Number(stops[step.from].lat)],
-          [Number(stops[step.to].lon), Number(stops[step.to].lat)],
-        ],
+        coordinates: step.fullStops.map(stopCode => [
+          Number(stops[stopCode].lon),
+          Number(stops[stopCode].lat)
+        ])
       },
     };
     output.features.push(feature);
