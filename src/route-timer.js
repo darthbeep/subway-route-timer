@@ -5,6 +5,7 @@ const GTFS_DIR = "./data";
 const PATH_FILE = "./input/start.csv";
 const START_TIME = "02:00:00";
 
+let path = []
 let stops = {};
 let routes = {};
 let trips = {};
@@ -20,13 +21,13 @@ function normalizeStopId(id) {
 function timeToSeconds(t) {
   if (t.includes(":")) {
     const [h, m, s] = t.split(":").map(Number);
-    return (h % 24) * 3600 + m * 60 + s;
+    return h * 3600 + m * 60 + s;
   } else {
     const d = new Date(t * 1000);
     const h = d.getHours();
     const m = d.getMinutes();
     const s = d.getSeconds();
-    return (h % 24) * 3600 + m * 60 + s;
+    return h * 3600 + m * 60 + s;
   }
 }
 
@@ -85,8 +86,9 @@ async function loadTrips() {
     fs.createReadStream(`${GTFS_DIR}/trips.txt`)
       .pipe(csv())
       .on("data", (r) => {
-        if (weekdayServices.has(r.service_id)) {
+        if (weekdayServices.has(r.service_id) && r.route_id !== "SI") {
           trips[r.trip_id] = r.route_id;
+          trips[r.trip_id + "_PREVDAY"] = r.route_id;
           trips[r.trip_id + "_NEXTDAY"] = r.route_id;
         }
       })
@@ -102,6 +104,7 @@ async function loadStopTimes() {
         if (!trips[r.trip_id]) return;
 
         const stopId = normalizeStopId(r.stop_id);
+        const prevDayId = r.trip_id + "_PREVDAY";
         const nextDayId = r.trip_id + "_NEXTDAY";
 
         if (!stopTimes[r.trip_id]) stopTimes[r.trip_id] = [];
@@ -112,6 +115,15 @@ async function loadStopTimes() {
           departure: timeToSeconds(r.departure_time),
           seq: Number(r.stop_sequence),
         });
+        if (timeToSeconds(r.departure_time) > SECONDS_IN_DAY) {
+          if (!stopTimes[prevDayId]) stopTimes[prevDayId] = [];
+          stopTimes[prevDayId].push({
+            stop_id: stopId,
+            arrival: timeToSeconds(r.arrival_time) - SECONDS_IN_DAY,
+            departure: timeToSeconds(r.departure_time) - SECONDS_IN_DAY,
+            seq: Number(r.stop_sequence),
+          });
+        }
         stopTimes[nextDayId].push({
           stop_id: stopId,
           arrival: timeToSeconds(r.arrival_time) + SECONDS_IN_DAY,
@@ -129,18 +141,17 @@ async function loadStopTimes() {
 }
 
 async function loadPath() {
-  const rows = [];
   return new Promise((resolve) => {
     fs.createReadStream(PATH_FILE)
       .pipe(csv())
       .on("data", (r) => {
-        rows.push({
+        path.push({
           from: r.from_stop,
           to: r.to_stop,
           transfer: Number(r.transfer_time || 0) * 60,
         });
       })
-      .on("end", () => resolve(rows));
+      .on("end", () => resolve());
   });
 }
 
@@ -174,18 +185,9 @@ function findTrip(fromStop, toStop, currentTime) {
   return best;
 }
 
-async function main() {
-  await loadStops();
-  await loadRoutes();
-  await loadCalendar();
-  await loadTrips();
-  await loadStopTimes();
-
-  const path = await loadPath();
-
-  let currentTime = timeToSeconds(START_TIME);
-
-  const tripStart = currentTime;
+function goThroughRoute(tripStart, logFullRoute = true) {
+  let currentTime = tripStart
+  let tripOffset = null
 
   for (const step of path) {
     const trip = findTrip(step.from, step.to, currentTime);
@@ -195,16 +197,23 @@ async function main() {
       return;
     }
 
-    console.log(
-      trip.route,
-      stops[step.from],
-      "→",
-      stops[step.to],
-      secondsToTime(trip.depart),
-      "→",
-      secondsToTime(trip.arrive),
-      step.transfer ? `(then walk ${step.transfer / 60} minutes)` : "",
-    );
+    if (tripOffset === null) {
+      tripOffset = trip.depart - tripStart
+    }
+
+    if (logFullRoute) {
+      console.log(
+        trip.route,
+        stops[step.from],
+        "→",
+        stops[step.to],
+        secondsToTime(trip.depart),
+        "→",
+        secondsToTime(trip.arrive),
+        step.transfer ? `(then walk ${step.transfer / 60} minutes)` : "",
+      );
+    }
+    
 
     visitedStops.add(step.from);
     visitedStops.add(step.to);
@@ -212,21 +221,40 @@ async function main() {
     currentTime = trip.arrive + step.transfer;
   }
 
-  let total = currentTime - tripStart;
+  let total = currentTime - tripStart - tripOffset;
   if (total < 0) total += SECONDS_IN_DAY;
 
-  console.log("\nTotal time:", secondsToTime(total));
-
-  const missing = [];
-
-  for (const id in stops) {
-    if (!visitedStops.has(id) && !id.startsWith("SIR")) {
-      missing.push(id);
-    }
+  if (logFullRoute) {
+    console.log("\nTotal time:", secondsToTime(total));
   }
 
-  //console.log("\nUnvisited stops:");
-  //console.log(missing.join(", "));
+  return total
 }
 
-main();
+function findManyRoutes(offset) {
+  let tripStart = 0
+  while (tripStart < SECONDS_IN_DAY) {
+    const duration = goThroughRoute(tripStart, false)
+    console.log(`Time for ${secondsToTime(tripStart)} start is ${secondsToTime(duration)}`)
+    tripStart += offset * 60
+  }
+}
+
+async function main(findMany = false) {
+  await loadStops();
+  await loadRoutes();
+  await loadCalendar();
+  await loadTrips();
+  await loadStopTimes();
+  await loadPath();
+
+  if (findMany) {
+    findManyRoutes(60)
+  }
+  else {
+    const tripStart = timeToSeconds(START_TIME);
+    goThroughRoute(tripStart)
+  }
+}
+
+main(false);
