@@ -6,7 +6,7 @@ First, copy `.env.example` to `.env`. Then change variables as needed.
 
 To install packages:
 ```bash
-npm run setup
+npm install
 ```
 
 To set up and gather data:
