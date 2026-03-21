@@ -14,13 +14,19 @@ export async function loadStops() {
     fs.createReadStream(`${GTFS_DIR}/stops.txt`)
       .pipe(csv())
       .on("data", (r) => {
-        if (r.stop_id === normalizeStopId(r.stop_id) && (!r.stop_id.startsWith("S") || r.stop_id === "S01" || r.stop_id === "S03" || r.stop_id === "S04")) {
+        if (
+          r.stop_id === normalizeStopId(r.stop_id) &&
+          (!r.stop_id.startsWith("S") ||
+            r.stop_id === "S01" ||
+            r.stop_id === "S03" ||
+            r.stop_id === "S04")
+        ) {
           stops[r.stop_id] = {
             stop_id: r.stop_id,
             name: r.stop_name,
             lat: r.stop_lat,
             lon: r.stop_lon,
-            visits: 0
+            visits: 0,
           };
         }
       })

@@ -16,8 +16,8 @@ let weekdayServices = new Set();
 
 function findTrip(fromStop, toStop, currentTime) {
   let best = null;
-  let bestFromIndex = -1
-  let bestToIndex = -1
+  let bestFromIndex = -1;
+  let bestToIndex = -1;
 
   for (const tripId in stopTimes) {
     const seq = stopTimes[tripId];
@@ -34,27 +34,32 @@ function findTrip(fromStop, toStop, currentTime) {
     if (depart < currentTime) continue;
 
     if (!best || depart < best.depart) {
-      bestFromIndex = fromIndex
-      bestToIndex = toIndex
+      bestFromIndex = fromIndex;
+      bestToIndex = toIndex;
       best = {
         tripId,
         depart,
         arrive,
         route: routes[trips[tripId]].name,
         color: routes[trips[tripId]].color,
-        fullStops: []
+        fullStops: [],
       };
     }
   }
 
-  if (best && bestFromIndex !== -1 && bestToIndex !== -1 && bestToIndex > bestFromIndex) {
-    const bestTrip = stopTimes[best.tripId]
-    let i = bestFromIndex
+  if (
+    best &&
+    bestFromIndex !== -1 &&
+    bestToIndex !== -1 &&
+    bestToIndex > bestFromIndex
+  ) {
+    const bestTrip = stopTimes[best.tripId];
+    let i = bestFromIndex;
     while (i <= bestToIndex) {
-      const stop = bestTrip[i].stop_id
-      stops[stop].visits += 1
-      best.fullStops.push(stop)
-      i+=1
+      const stop = bestTrip[i].stop_id;
+      stops[stop].visits += 1;
+      best.fullStops.push(stop);
+      i += 1;
     }
   }
   return best;
@@ -85,7 +90,7 @@ function createRouteSteps(tripStart) {
       depart: trip.depart,
       transfer: step.transfer,
       color: trip.color,
-      fullStops: trip.fullStops
+      fullStops: trip.fullStops,
     });
 
     currentTime = trip.arrive + step.transfer;
@@ -97,7 +102,7 @@ function createRouteSteps(tripStart) {
   return route;
 }
 
-function displayFullRoute() {
+export function displayFullRoute() {
   const tripStart = timeToSeconds(START_TIME);
   const route = createRouteSteps(tripStart);
   for (const step of route) {
@@ -115,18 +120,18 @@ function displayFullRoute() {
   const totalTime = route[route.length - 1].arrive - route[0].depart;
   console.log("\nTotal time:", secondsToTime(totalTime));
 
-  const missingStops = []
+  const missingStops = [];
   for (const stop of Object.values(stops)) {
     if (stop.visits === 0) {
-      missingStops.push(stop.stop_id)
+      missingStops.push(stop.stop_id);
     }
   }
   if (missingStops.length > 0) {
-    console.log("Missing stops:", missingStops.join(", "))
+    console.log("Missing stops:", missingStops.join(", "));
   }
 }
 
-function findManyRoutes(offset) {
+export function findManyRoutes(offset) {
   let tripStart = 0;
   while (tripStart < SECONDS_IN_DAY) {
     const route = createRouteSteps(tripStart, false);
@@ -138,7 +143,7 @@ function findManyRoutes(offset) {
   }
 }
 
-async function createGeoJson() {
+export async function createGeoJson() {
   const tripStart = timeToSeconds(START_TIME);
   const route = createRouteSteps(tripStart);
 
@@ -156,19 +161,24 @@ async function createGeoJson() {
 
   let i = 1;
   for (const step of route) {
+    let description = `${step.route} ${stops[step.from].name} -> ${stops[step.to].name}<br />${secondsToTime(step.depart)} -> ${secondsToTime(step.arrive)}`;
+    if (step.transfer) {
+      description += `<br />(then walk ${step.transfer / 60} minutes)`;
+    }
     const feature = {
       type: "Feature",
       properties: {
         step: i,
         line: step.route,
         color: step.color,
+        description,
       },
       geometry: {
         type: "LineString",
-        coordinates: step.fullStops.map(stopCode => [
+        coordinates: step.fullStops.map((stopCode) => [
           Number(stops[stopCode].lon),
-          Number(stops[stopCode].lat)
-        ])
+          Number(stops[stopCode].lat),
+        ]),
       },
     };
     output.features.push(feature);
@@ -179,7 +189,7 @@ async function createGeoJson() {
   console.log("Writing to geojson file");
 }
 
-async function setup() {
+export async function setup() {
   stops = await dataLoader.loadStops();
   routes = await dataLoader.loadRoutes();
   weekdayServices = await dataLoader.loadCalendar();
@@ -187,17 +197,3 @@ async function setup() {
   stopTimes = await dataLoader.loadStopTimes(trips);
   path = await dataLoader.loadPath();
 }
-
-async function main(mode = 0) {
-  await setup();
-
-  if (mode === 0) {
-    displayFullRoute();
-  } else if (mode === 1) {
-    findManyRoutes(60);
-  } else if (mode === 2) {
-    createGeoJson();
-  }
-}
-
-main(0);
