@@ -4,5 +4,5 @@ node_modules
 data/*.zip
 data/*.txt
 data-*
-input/*.csv
+input/**/*.csv
 output/*

@@ -18,4 +18,4 @@ async function main(mode = 0) {
   }
 }
 
-main(2);
+main(0);

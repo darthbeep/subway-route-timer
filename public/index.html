@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Basic Leaflet Map</title>
+    <title>Subway Route Display</title>
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -16,8 +16,12 @@
       crossorigin=""
     ></script>
     <style>
+      html,
+      body {
+        height: 100%;
+      }
       #map {
-        height: 1000px;
+        height: 100%;
       }
       .line-label {
         background: rgba(255, 255, 255, 0); /* Transparent background */

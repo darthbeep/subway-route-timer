@@ -37,7 +37,10 @@ async function displayData() {
   }).addTo(map);
 }
 
-var map = L.map("map").setView([40.732338 + 0, -73.900495], 13);
+var map = L.map("map", { zoomSnap: 0.25 }).setView(
+  [40.732338, -73.900495],
+  11.5,
+);
 var Esri_WorldGrayCanvas = L.tileLayer(
   "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
   {
