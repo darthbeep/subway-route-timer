@@ -13,7 +13,6 @@ async function loadServerFile(url) {
 function onEachFeature(feature, layer) {
   // does this feature have a property named popupContent?
   if (feature.properties && feature.properties.step) {
-    console.log(feature.properties);
     layer
       .bindTooltip(`${feature.properties.step}`, {
         permanent: true,
@@ -26,15 +25,33 @@ function onEachFeature(feature, layer) {
   }
 }
 
-async function displayData() {
+async function displayRouteData() {
   const data = await loadServerFile("/output/gis.geojson");
-  L.geoJSON(data, {
+  return L.geoJSON(data, {
     style: function (feature) {
-      return { color: feature.properties.color };
+      return { color: feature.properties.color, weight: 4 };
     },
     arrowheads: {},
     onEachFeature,
-  }).addTo(map);
+  });
+}
+
+async function setupLayers() {
+  const generatedRoute = await displayRouteData();
+
+  const subwayData = await loadServerFile("data/subwaylines.geojson");
+  const subwayLines = L.geoJSON(subwayData, { style: { opacity: 0.2 } });
+
+  const overlayRoute = {
+    Route: generatedRoute,
+    "MTA Subway Lines": subwayLines,
+  };
+  L.control.layers(null, overlayRoute).addTo(map);
+  map.addLayer(generatedRoute);
+
+  map.on("overlayadd", function (event) {
+    generatedRoute.bringToFront();
+  });
 }
 
 var map = L.map("map", { zoomSnap: 0.25 }).setView(
@@ -49,4 +66,4 @@ var Esri_WorldGrayCanvas = L.tileLayer(
   },
 ).addTo(map);
 
-displayData();
+setupLayers();
